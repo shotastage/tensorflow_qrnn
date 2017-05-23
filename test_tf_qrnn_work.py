@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.datasets import load_digits
 from sklearn.metrics import accuracy_score
 import tensorflow as tf
-from tensorflow.python.ops import rnn, rnn_cell
+from tensorflow.contrib import rnn
 from tf_qrnn import QRNN
 
 
@@ -62,11 +62,11 @@ class TestQRNNWork(unittest.TestCase):
             pred = self.baseline_forward(X, size, n_class)
             summary_dir += "/lstm"
         else:
-            pred = self.random_forward(X, size, n_class)            
+            pred = self.random_forward(X, size, n_class)
             summary_dir += "/random"
-        
+
         with tf.name_scope("optimization"):
-            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, y))
+            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
             optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 
         with tf.name_scope("evaluation"):
@@ -91,20 +91,20 @@ class TestQRNNWork(unittest.TestCase):
                     _loss, _accuracy, _merged = sess.run([loss, accuracy, merged], feed_dict={X: _X, y: _y})
                     writer.add_summary(_merged, i)
                     print("Iter {}: loss={}, accuracy={}".format(i, _loss, _accuracy))
-            
+
             with tf.name_scope("test-evaluation"):
                 acc = sess.run(accuracy, feed_dict={X: images[-batch_size:], y: target[-batch_size:]})
                 print("Testset Accuracy={}".format(acc))
-    
+
     def baseline_forward(self, X, size, n_class):
         shape = X.get_shape()
         _X = tf.transpose(X, [1, 0, 2])  # batch_size x sentence_length x word_length -> batch_size x sentence_length x word_length
         _X = tf.reshape(_X, [-1, int(shape[2])])  # (batch_size x sentence_length) x word_length
-        seq = tf.split(0, int(shape[1]), _X)  # sentence_length x (batch_size x word_length)
+        seq = tf.split(_X, int(shape[1]), 0)  # sentence_length x (batch_size x word_length)
 
         with tf.name_scope("LSTM"):
-            lstm_cell = rnn_cell.BasicLSTMCell(size, forget_bias=1.0)
-            outputs, states = rnn.rnn(lstm_cell, seq, dtype=tf.float32)
+            lstm_cell = rnn.BasicLSTMCell(size, forget_bias=1.0)
+            outputs, states = rnn.static_rnn(lstm_cell, seq, dtype=tf.float32)
 
         with tf.name_scope("LSTM-Classifier"):
             W = tf.Variable(tf.random_normal([size, n_class]), name="W")
